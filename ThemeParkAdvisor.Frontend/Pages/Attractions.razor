@@ -1,0 +1,138 @@
+﻿@page "/attractions"
+@using System.Net.Http.Json
+@using ThemeParkAdvisor.Shared
+@inject HttpClient Http
+
+<h3>Atrakce</h3>
+
+<EditForm Model="@this" OnValidSubmit="SendRequest">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <!-- Výběr parku -->
+    <div class="mb-3">
+        <label>Zábavní park:</label>
+        <InputSelect @bind-Value="ThemeParkToVisitId" class="form-control">
+            <option value="">-- Vyber park --</option>
+            @if (themeParkNames != null)
+            {
+                @foreach (var park in themeParkNames)
+                {
+                    <option value="@park.ThemeParkId">@park.Name</option>
+                }
+            }
+        </InputSelect>
+    </div>
+
+    <!-- Adrenalin Level -->
+    <div class="mb-3">
+        <label>Úroveň adrenalinu (0–10):</label>
+        <InputNumber @bind-Value="AdrenalineLevel" class="form-control" />
+        @if (AdrenalineLevel is < 0 or > 10)
+        {
+            <div class="text-danger">Hodnota musí být mezi 0 a 10.</div>
+        }
+    </div>
+
+    <!-- Minimální požadovaná výška -->
+    <div class="mb-3">
+        <label>Výška nejmenší osoby (cm):</label>
+        <InputNumber @bind-Value="MaxRequiredHeight" class="form-control" placeholder="např. 120" />
+    </div>
+
+    <hr class="my-4" /
+
+    <!-- Počet atrakcí -->
+    <div class="mb-3">
+        <label>Počet atrakcí k zobrazení:</label>
+        <InputNumber @bind-Value="WantedAttractionsCount" class="form-control" />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Odeslat požadavek</button>
+</EditForm>
+
+<!-- Výpis výsledků -->
+@if (attractions != null && attractions.Any())
+{
+    <h4 class="mt-4">Doporučené atrakce:</h4>
+    <div class="row">
+        @foreach (var attraction in attractions)
+        {
+            <div class="col-md-4 mb-3">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">@attraction.Name</h5>
+                        <h6 class="card-subtitle mb-2 text-muted">@attraction.TypeName</h6>
+                        <p class="card-text">
+                            <strong>Adrenalin:</strong> @attraction.AdrenalineLevel/10 <br />
+                            <strong>Minimální výška:</strong> @attraction.MinHeight cm <br />
+                            <strong>Skóre:</strong> @attraction.Score
+                        </p>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else if (responseText != null)
+{
+    <div class="alert alert-info mt-4">@responseText</div>
+}
+
+@code {
+    public int? ThemeParkToVisitId { get; set; }
+    public int? WantedAttractionsCount { get; set; }
+    public int? AdrenalineLevel { get; set; }
+    public int? MaxRequiredHeight { get; set; }
+
+    private string? responseText;
+    private List<ThemeParkNameDto>? themeParkNames;
+    private List<AttractionRecommendationDto>? attractions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Načteme seznam parků pro dropdown
+            themeParkNames = await Http.GetFromJsonAsync<List<ThemeParkNameDto>>("api/ThemeParks/names");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Chyba při načítání seznamu parků: {ex.Message}");
+        }
+    }
+
+    private async Task SendRequest()
+    {
+        // Validace rozsahu adrenalinu
+        if (AdrenalineLevel is < 0 or > 10)
+        {
+            responseText = "Chyba: Úroveň adrenalinu musí být mezi 0 a 10.";
+            attractions = null;
+            return;
+        }
+
+        var dto = new AttractionPreferencesDto(
+            ThemeParkToVisitId,
+            WantedAttractionsCount,
+            AdrenalineLevel,
+            MaxRequiredHeight
+        );
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/Attractions/recommendations", dto);
+            response.EnsureSuccessStatusCode();
+
+            attractions = await response.Content.ReadFromJsonAsync<List<AttractionRecommendationDto>>();
+            responseText = attractions == null || !attractions.Any()
+                ? "Žádné výsledky."
+                : null;
+        }
+        catch (Exception ex)
+        {
+            responseText = $"Chyba: {ex.Message}";
+            attractions = null;
+        }
+    }
+}

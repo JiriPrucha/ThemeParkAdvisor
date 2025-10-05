@@ -1,0 +1,268 @@
+﻿@page "/themeparks"
+@using System.Net.Http.Json
+@using ThemeParkAdvisor.Shared
+@inject HttpClient Http
+
+<h3>Theme Park Advisor</h3>
+
+<EditForm Model="@this" OnValidSubmit="SendRequest">
+    <DataAnnotationsValidator />
+    <Component />
+
+    <!-- Dropdown pro oblíbený park  -->
+    <div class="mb-3">
+        <label>Oblíbený zábavní park:</label>
+        <InputSelect @bind-Value="FavoriteThemeParkId" class="form-control">
+            <option value="">-- Vyberte park --</option>
+            @if (themeParkNames != null)
+            {
+                @foreach (var park in themeParkNames)
+                {
+                    <option value="@park.ThemeParkId">@park.Name</option>
+                }
+            }
+        </InputSelect>
+    </div>
+
+    <!-- Parky, které nechci navštívit -->
+    <div class="mb-3">
+        <label>Parky, které nechci navštívit:</label>
+        <div class="d-flex gap-2">
+            <InputSelect @bind-Value="SelectedNotToVisitId" class="form-select w-100">
+                <option value="">-- Vyberte park k přidání --</option>
+                @if (themeParkNames != null)
+                {
+                    @foreach (var park in themeParkNames
+                                    .Where(p => ThemeParksNotToVisitIds.Contains(p.ThemeParkId) == false))
+                    {
+                        <option value="@park.ThemeParkId">@park.Name</option>
+                    }
+                }
+            </InputSelect>
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    @onclick="AddNotToVisit"
+                    disabled="@(SelectedNotToVisitId is null)">
+                Přidat
+            </button>
+        </div>
+
+        @if (ThemeParksNotToVisitIds.Any())
+        {
+            <div class="mt-2 d-flex flex-wrap gap-2">
+                @foreach (var id in ThemeParksNotToVisitIds)
+                {
+                    var name = themeParkNames?.FirstOrDefault(p => p.ThemeParkId == id)?.Name ?? $"ID {id}";
+                    <span class="badge bg-light text-dark">
+                        @name
+                        <button type="button"
+                                class="btn btn-sm btn-light ms-2 py-0 px-1"
+                                title="Odebrat"
+                                @onclick="() => RemoveNotToVisit(id)">
+                            ×
+                        </button>
+                    </span>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Formulář -->
+    <div class="mb-3">
+        <label>Země:</label>
+        <InputNumber @bind-Value="CountryId" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label>Region:</label>
+        <InputNumber @bind-Value="RegionId" class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label>Město:</label>
+        <InputNumber @bind-Value="CityId" class="form-control" />
+    </div>
+
+    <div class="mb-3 row">
+        <div class="col">
+            <label>Latitude:</label>
+            <InputNumber @bind-Value="Latitude" class="form-control" />
+        </div>
+        <div class="col">
+            <label>Longitude:</label>
+            <InputNumber @bind-Value="Longitude" class="form-control" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Level adrenalinu (0–10):</label>
+        <InputNumber @bind-Value="AdrenalineLevel" class="form-control" />
+        @if (AdrenalineLevel is < 0 or > 10)
+        {
+            <div class="text-danger">Hodnota musí být mezi 0 a 10.</div>
+        }
+    </div>
+
+    <div class="mb-3">
+        <label>Minimální počet atrakcí:</label>
+        <InputNumber @bind-Value="MinAttractionsCount" class="form-control"/>
+    </div>
+
+    <hr />
+
+    <h4>Cestovatelé</h4>
+    <button type="button" class="btn btn-success mb-3" @onclick="AddTraveler">Přidat dalšího</button>
+   
+    @foreach (var traveler in Travelers)
+    {
+        <div @key="traveler.Id" class="mb-2">
+            <InputNumber @bind-Value="traveler.Age" class="form-control d-inline-block w-auto" placeholder="Věk" />
+            <button type="button" class="btn btn-danger btn-sm ms-2" @onclick="() => RemoveTraveler(traveler.Id)">Smazat</button>
+        </div>
+    }
+
+    <hr class="my-4" />
+
+    <div class="mb-3">
+        <label>Počet zábavních parků k zobrazení:</label>
+        <InputNumber @bind-Value="WantedThemeParksCount" class="form-control" placeholder="5" />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Odeslat požadavek</button>
+</EditForm>
+
+<!-- Výpis výsledků -->
+@if (parks != null && parks.Any())
+{
+    <h4 class="mt-4">Doporučené parky:</h4>
+    <div class="row">
+        @foreach (var park in parks)
+        {
+            <div class="col-md-4 mb-3">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">@park.Name</h5>
+                        <h6 class="card-subtitle mb-2 text-muted">@park.CityName, @park.CountryName</h6>
+                        <p class="card-text">
+                            <strong>Velikost:</strong> @park.Size <br />
+                            <strong>Atrakce:</strong> @park.AttractionCount <br />
+                            <strong>Horských drah:</strong> @park.RollerCoasterCount <br />
+                            <strong>Skóre:</strong> @park.Score
+                        </p>
+                    </div>
+                    <div class="card-footer text-muted">
+                        GPS: @park.Latitude, @park.Longitude
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else if (responseText != null)
+{
+    <div class="alert alert-info mt-4">@responseText</div>
+}
+
+@code {
+    public int? FavoriteThemeParkId { get; set; }
+    public int? SelectedNotToVisitId { get; set; }
+    public List<int> ThemeParksNotToVisitIds { get; set; } = new();
+
+    public int? CountryId { get; set; }
+    public int? RegionId { get; set; }
+    public int? CityId { get; set; }
+    public int? AdrenalineLevel { get; set; }
+    public int? WantedThemeParksCount { get; set; }
+    public int? MinAttractionsCount { get; set; }
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+
+    public class Traveler
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public int? Age { get; set; }
+    }
+
+    public List<Traveler> Travelers { get; set; } = new();
+
+    private string? responseText;
+    private List<ThemeParkRecommendationDto>? parks;
+    private List<ThemeParkNameDto>? themeParkNames; // seznam parků pro dropdowny
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Jediný call pro jména parků, využit pro oba dropdowny
+            themeParkNames = await Http.GetFromJsonAsync<List<ThemeParkNameDto>>("api/ThemeParks/names");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Chyba při načítání seznamu parků: {ex.Message}");
+        }
+    }
+
+    private void AddTraveler() => Travelers.Add(new Traveler());
+
+    private void RemoveTraveler(Guid id)
+    {
+        var traveler = Travelers.FirstOrDefault(t => t.Id == id);
+        if (traveler != null)
+            Travelers.Remove(traveler);
+    }
+
+    private void AddNotToVisit()
+    {
+        if (SelectedNotToVisitId is int id && !ThemeParksNotToVisitIds.Contains(id))
+        {
+            ThemeParksNotToVisitIds.Add(id);
+            SelectedNotToVisitId = null; // vyčistit výběr po přidání
+        }
+    }
+
+    private void RemoveNotToVisit(int id)
+    {
+        ThemeParksNotToVisitIds.Remove(id);
+    }
+
+    private async Task SendRequest()
+    {
+        if (AdrenalineLevel is < 0 or > 10)
+        {
+            responseText = "Chyba: AdrenalineLevel musí být mezi 0 a 10.";
+            parks = null;
+            return;
+        }
+
+        var dto = new ThemeParkPreferencesDto(
+            FavoriteThemeParkId,
+            ThemeParksNotToVisitIds.Any() ? ThemeParksNotToVisitIds.ToArray() : null,
+            Travelers.Where(t => t.Age.HasValue).Select(t => t.Age!.Value).ToArray(),
+            CountryId,
+            RegionId,
+            CityId,
+            AdrenalineLevel,
+            Latitude,
+            Longitude,
+            WantedThemeParksCount,
+            MinAttractionsCount
+        );
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/ThemeParks/recommendations", dto);
+            response.EnsureSuccessStatusCode();
+
+            // Deserializace přímo na seznam DTO
+            parks = await response.Content.ReadFromJsonAsync<List<ThemeParkRecommendationDto>>();
+            responseText = parks == null || !parks.Any()
+                ? "Žádné výsledky."
+                : null;
+        }
+        catch (Exception ex)
+        {
+            responseText = $"Chyba: {ex.Message}";
+            parks = null;
+        }
+    }
+}
