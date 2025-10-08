@@ -23,15 +23,35 @@ namespace ThemeParkAdvisor.Infrastructure
         }
 
         /// <summary>
-        /// Retrieves all theme park names with their IDs from the database.
+        /// Retrieves all theme park names based on filters.
         /// </summary>
         /// <returns>
         /// A task representing the asynchronous operation, containing a list of <see cref="ThemeParkName"/> objects.
         /// </returns>
-        public async Task<List<ThemeParkName>> GetThemeParkNamesAsync()
+        public async Task<List<ThemeParkName>> GetThemeParkNamesAsync(ThemeParkNameFilter filter)
         {
-            return await _db.ThemeParks
+            var query = _db.ThemeParks
                 .AsNoTracking()
+                .Include(p => p.City)
+                    .ThenInclude(c => c.Region)
+                        .ThenInclude(r => r.Country)
+                .AsQueryable();
+
+            if (filter.CityId.HasValue)
+            {
+                query = query.Where(p => p.CityId == filter.CityId.Value);
+            }
+            else if (filter.RegionId.HasValue)
+            {
+                query = query.Where(p => p.City.RegionId == filter.RegionId.Value);
+            }
+            else if (filter.CountryId.HasValue)
+            {
+                query = query.Where(p => p.City.Region.CountryId == filter.CountryId.Value);
+            }
+
+            return await query
+                .OrderBy(p => p.Name)
                 .Select(p => new ThemeParkName(
                     p.ThemeParkId,
                     p.Name

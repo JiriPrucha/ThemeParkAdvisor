@@ -3,13 +3,13 @@
 @using ThemeParkAdvisor.Shared
 @inject HttpClient Http
 
-<h3>Theme Park Advisor</h3>
+<h3>Zábavní Parky</h3>
 
 <EditForm Model="@this" OnValidSubmit="SendRequest">
     <DataAnnotationsValidator />
     <Component />
 
-    <!-- Dropdown pro oblíbený park  -->
+    <!-- Favorite theme parks dropdown  -->
     <div class="mb-3">
         <label>Oblíbený zábavní park:</label>
         <InputSelect @bind-Value="FavoriteThemeParkId" class="form-control">
@@ -24,7 +24,7 @@
         </InputSelect>
     </div>
 
-    <!-- Parky, které nechci navštívit -->
+    <!-- Theme Parks, user does not want to visit -->
     <div class="mb-3">
         <label>Parky, které nechci navštívit:</label>
         <div class="d-flex gap-2">
@@ -32,6 +32,7 @@
                 <option value="">-- Vyberte park k přidání --</option>
                 @if (themeParkNames != null)
                 {
+					var ThemeParksNotToVisitIds = ThemeParksNotToVisit.Select(t => t.Item1).ToList();
                     @foreach (var park in themeParkNames
                                     .Where(p => ThemeParksNotToVisitIds.Contains(p.ThemeParkId) == false))
                     {
@@ -47,18 +48,18 @@
             </button>
         </div>
 
-        @if (ThemeParksNotToVisitIds.Any())
+        @if (ThemeParksNotToVisit.Any())
         {
             <div class="mt-2 d-flex flex-wrap gap-2">
-                @foreach (var id in ThemeParksNotToVisitIds)
+                @foreach (var park in ThemeParksNotToVisit)
                 {
-                    var name = themeParkNames?.FirstOrDefault(p => p.ThemeParkId == id)?.Name ?? $"ID {id}";
+                    var name = park.Item2;
                     <span class="badge bg-light text-dark">
                         @name
                         <button type="button"
                                 class="btn btn-sm btn-light ms-2 py-0 px-1"
                                 title="Odebrat"
-                                @onclick="() => RemoveNotToVisit(id)">
+                                @onclick="() => RemoveNotToVisit(park.Item1)">
                             ×
                         </button>
                     </span>
@@ -67,21 +68,59 @@
         }
     </div>
 
-    <!-- Formulář -->
+    <!-- Countries dropdown -->
     <div class="mb-3">
         <label>Země:</label>
-        <InputNumber @bind-Value="CountryId" class="form-control" />
+        <InputSelect @bind-Value="CountryId"
+                     @bind-Value:after="OnCountryChanged"
+                     class="form-control">
+            <option value="">-- Vyberte zemi --</option>
+            @if (countries != null)
+            {
+                @foreach (var c in countries.OrderBy(c => c.Name))
+                {
+                    <option value="@c.CountryId">@c.Name</option>
+                }
+            }
+        </InputSelect>
     </div>
 
+    <!-- Regions dropdown -->
     <div class="mb-3">
         <label>Region:</label>
-        <InputNumber @bind-Value="RegionId" class="form-control" />
+        <InputSelect @bind-Value="RegionId"
+                     @bind-Value:after="OnRegionChanged"
+                     class="form-control"
+                     disabled="@(CountryId is null)">
+            <option value="">-- Vyberte region --</option>
+            @if (regions != null)
+            {
+                @foreach (var r in regions.OrderBy(r => r.Name))
+                {
+                    <option value="@r.RegionId">@r.Name</option>
+                }
+            }
+        </InputSelect>
     </div>
 
+    <!-- ¨Cities dropdown -->
     <div class="mb-3">
         <label>Město:</label>
-        <InputNumber @bind-Value="CityId" class="form-control" />
+        <InputSelect @bind-Value="CityId"
+                     @bind-Value:after="OnCityChanged"
+                     class="form-control"
+                     disabled="@(CountryId is null)">
+            <option value="">-- Vyberte město --</option>
+            @if (cities != null)
+            {
+                @foreach (var m in cities.OrderBy(m => m.Name))
+                {
+                    <option value="@m.CityId">@m.Name</option>
+                }
+            }
+        </InputSelect>
     </div>
+
 
     <div class="mb-3 row">
         <div class="col">
@@ -166,11 +205,16 @@ else if (responseText != null)
 @code {
     public int? FavoriteThemeParkId { get; set; }
     public int? SelectedNotToVisitId { get; set; }
-    public List<int> ThemeParksNotToVisitIds { get; set; } = new();
+    public List<Tuple<int,string>> ThemeParksNotToVisit { get; set; } = new();
 
     public int? CountryId { get; set; }
     public int? RegionId { get; set; }
     public int? CityId { get; set; }
+
+    private List<CountryNameDto>? countries;
+    private List<RegionNameDto>? regions;
+    private List<CityNameDto>? cities;
+
     public int? AdrenalineLevel { get; set; }
     public int? WantedThemeParksCount { get; set; }
     public int? MinAttractionsCount { get; set; }
@@ -187,20 +231,97 @@ else if (responseText != null)
 
     private string? responseText;
     private List<ThemeParkRecommendationDto>? parks;
-    private List<ThemeParkNameDto>? themeParkNames; // seznam parků pro dropdowny
+    private List<ThemeParkNameDto>? themeParkNames;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            // Jediný call pro jména parků, využit pro oba dropdowny
-            themeParkNames = await Http.GetFromJsonAsync<List<ThemeParkNameDto>>("api/ThemeParks/names");
+            // načti všechny země hned na začátku
+            var response = await Http.PostAsJsonAsync("api/Countries/countries", new CountryFilterDto());
+            countries = await response.Content.ReadFromJsonAsync<List<CountryNameDto>>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Chyba při načítání seznamu zemí: {ex.Message}");
+        }
+
+        try
+        {
+            var themeParkResponse = await Http.PostAsJsonAsync("api/ThemeParks/names", new ThemeParkNameFilterDto(CountryId: null, RegionId: null, CityId: null));
+            themeParkNames = await themeParkResponse.Content.ReadFromJsonAsync<List<ThemeParkNameDto>>();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Chyba při načítání seznamu parků: {ex.Message}");
         }
     }
+
+    private async Task OnCountryChanged()
+    {
+        // CountryId už je nastaveno bindingem
+        RegionId = null;
+        CityId = null;
+
+        if (CountryId is int cid)
+        {
+            var regionResponse = await Http.PostAsJsonAsync("api/Regions/regions", new RegionFilterDto(CountryId: cid));
+            regions = await regionResponse.Content.ReadFromJsonAsync<List<RegionNameDto>>();
+
+            var cityResponse = await Http.PostAsJsonAsync("api/Cities/cities", new CityFilterDto(CountryId: cid));
+            cities = await cityResponse.Content.ReadFromJsonAsync<List<CityNameDto>>();
+
+            var themeParkResponse = await Http.PostAsJsonAsync("api/ThemeParks/names", new ThemeParkNameFilterDto(CountryId: cid, RegionId: null, CityId: null));
+            themeParkNames = await themeParkResponse.Content.ReadFromJsonAsync<List<ThemeParkNameDto>>();
+        }
+        else
+        {
+            var themeParkResponse = await Http.PostAsJsonAsync("api/ThemeParks/names", new ThemeParkNameFilterDto(CountryId: null, RegionId: null, CityId: null));
+            themeParkNames = await themeParkResponse.Content.ReadFromJsonAsync<List<ThemeParkNameDto>>();
+
+            regions = null;
+            cities = null;
+        }
+    }
+
+    private async Task OnRegionChanged()
+    {
+        CityId = null;
+
+        if (RegionId is int rid)
+        {
+            var countryResponse = await Http.PostAsJsonAsync("api/Countries/countries", new CountryFilterDto(RegionId: rid));
+            var possibleCountries = await countryResponse.Content.ReadFromJsonAsync<List<CountryNameDto>>();
+            if (possibleCountries?.Any() == true)
+                CountryId = possibleCountries.First().CountryId;
+
+            var cityResponse = await Http.PostAsJsonAsync("api/Cities/cities", new CityFilterDto(RegionId: rid));
+            cities = await cityResponse.Content.ReadFromJsonAsync<List<CityNameDto>>();
+        }
+        else if (CountryId is int cid)
+        {
+            var cityResponse = await Http.PostAsJsonAsync("api/Cities/cities", new CityFilterDto(CountryId: cid));
+            cities = await cityResponse.Content.ReadFromJsonAsync<List<CityNameDto>>();
+        }
+    }
+
+    private async Task OnCityChanged()
+    {
+        if (CityId is int cityId)
+        {
+            var regionResponse = await Http.PostAsJsonAsync("api/Regions/regions", new RegionFilterDto(CityId: cityId));
+            var possibleRegions = await regionResponse.Content.ReadFromJsonAsync<List<RegionNameDto>>();
+            if (possibleRegions?.Any() == true)
+                RegionId = possibleRegions.First().RegionId;
+
+            var countryResponse = await Http.PostAsJsonAsync("api/Countries/countries", new CountryFilterDto(CityId: cityId));
+            var possibleCountries = await countryResponse.Content.ReadFromJsonAsync<List<CountryNameDto>>();
+            if (possibleCountries?.Any() == true)
+                CountryId = possibleCountries.First().CountryId;
+        }
+    }
+
+
 
     private void AddTraveler() => Travelers.Add(new Traveler());
 
@@ -213,16 +334,39 @@ else if (responseText != null)
 
     private void AddNotToVisit()
     {
-        if (SelectedNotToVisitId is int id && !ThemeParksNotToVisitIds.Contains(id))
+        if (SelectedNotToVisitId is int id)
         {
-            ThemeParksNotToVisitIds.Add(id);
-            SelectedNotToVisitId = null; // vyčistit výběr po přidání
+			Tuple<int, string> parkTuple = new(id, themeParkNames?.FirstOrDefault(p => p.ThemeParkId == id)?.Name ?? $"ID {id}");
+            if (!ThemeParksNotToVisit.Contains(parkTuple))
+            {
+                ThemeParksNotToVisit.Add(parkTuple);
+            }
+            
+            SelectedNotToVisitId = null;
         }
     }
 
     private void RemoveNotToVisit(int id)
     {
-        ThemeParksNotToVisitIds.Remove(id);
+        Tuple<int, string> parkTuple = ThemeParksNotToVisit?.FirstOrDefault(p => p.Item1 == id);
+        ThemeParksNotToVisit.Remove(parkTuple);
+    }
+
+    private async Task GetCountriesAsync()
+    {
+        var countryFilter = new CountryFilterDto
+        {
+            RegionId = null,
+            CityId = null
+		};
+
+        var response = await Http.PostAsJsonAsync("api/Countries/countries", countryFilter);
+        response.EnsureSuccessStatusCode();
+
+        countries = await response.Content.ReadFromJsonAsync<List<CountryNameDto>>();
+        responseText = countries == null || !countries.Any()
+            ? "Žádné výsledky."
+            : null;
     }
 
     private async Task SendRequest()
@@ -233,6 +377,8 @@ else if (responseText != null)
             parks = null;
             return;
         }
+
+		var ThemeParksNotToVisitIds = ThemeParksNotToVisit.Select(t => t.Item1).ToList();
 
         var dto = new ThemeParkPreferencesDto(
             FavoriteThemeParkId,

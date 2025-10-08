@@ -1,4 +1,4 @@
-﻿using ThemeParkAdvisor.Application;
+﻿using ThemeParkAdvisor.Shared;
 using ThemeParkAdvisor.Domain;
 
 namespace ThemeParkAdvisor.Api

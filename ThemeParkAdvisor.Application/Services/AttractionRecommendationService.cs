@@ -22,7 +22,7 @@ namespace ThemeParkAdvisor.Application
         public async Task<IEnumerable<AttractionRecommendation>> RecommendAsync(AttractionPreferences preferences)
         {
             // Preload theme park names into a dictionary for quick lookup
-            var parkNames = (await _themeParkRepository.GetThemeParkNamesAsync())
+            var parkNames = (await _themeParkRepository.GetThemeParkNamesAsync(new ThemeParkNameFilter(null, null, null)))
                 .ToDictionary(p => p.ThemeParkId, p => p.Name);
 
             // Configure the generic recommendation service for Attraction

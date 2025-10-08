@@ -1,5 +1,4 @@
-﻿using System;
-namespace ThemeParkAdvisor.Shared
+﻿namespace ThemeParkAdvisor.Shared
 {
     public record CountryNameDto(
         int? CountryId,

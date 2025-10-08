@@ -22,10 +22,11 @@ namespace ThemeParkAdvisor.Api
         /// <summary>
         /// Retrieves a list of all theme park names with their IDs.
         /// </summary>
-        [HttpGet("names")]
-        public async Task<ActionResult<IEnumerable<ThemeParkNameDto>>> GetNames()
+        [HttpPost("names")]
+        public async Task<ActionResult<IEnumerable<ThemeParkNameDto>>> GetNames([FromBody] ThemeParkNameFilterDto filterDto)
         {
-            var parks = await _parkRepository.GetThemeParkNamesAsync();
+            var filter = filterDto.ToDomain();
+            var parks = await _parkRepository.GetThemeParkNamesAsync(filter);
             var result = parks.Select(p => p.ToDto());
 
             return Ok(result);

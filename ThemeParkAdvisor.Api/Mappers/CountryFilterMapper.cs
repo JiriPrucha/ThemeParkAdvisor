@@ -1,5 +1,5 @@
-﻿using ThemeParkAdvisor.Application;
-using ThemeParkAdvisor.Domain;
+﻿using ThemeParkAdvisor.Domain;
+using ThemeParkAdvisor.Shared;
 
 namespace ThemeParkAdvisor.Api
 {
